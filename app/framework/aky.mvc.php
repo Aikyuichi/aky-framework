@@ -29,10 +29,17 @@ class app {
     /**
      * 
      * @param string $route Can contain regular expressions, the sub expressions are passed as arguments to the target method.
-     * @param string $target Controller class and method to invoke with the form "name_controller::method"; if no method specified, default_action is invoked as default.
+     * @param string $target Controller class and method to invoke with the form "name_controller::method" or "name_controller"; if no method specified, default_action is invoked as method.
      */
     public static function add_route($route, $target = NULL) {
         self::get_instance();
+        if (!is_string($route)) {
+            throw new Exception("route must be a string");
+        }
+        $target_regexp = '#^.*_controller(::.+){0,1}$#';
+        if (preg_match($target_regexp, $target) !== 1) {
+            throw new Exception("target: $target must be a string of the form: \"name_controller::method\", \"name_controller\" or NULL");
+        }
         self::$instance->routes_dictonary[$route] = $target;
     }
 
@@ -76,6 +83,11 @@ class app {
         controller_factory::excecute_method($this->controller_class, $this->controller_method, $this->controller_args);
     }
 
+    /**
+     * Main function of the application.
+     * Validate the requested URI and execute the associated controller method.
+     * @throws bad_uri_exception
+     */
     public static function run() {
         self::get_instance();
         if (!self::$instance->validate_request_route()) {
@@ -84,16 +96,31 @@ class app {
         self::$instance->run_controller();
     }
 
+    /**
+     * 
+     * @param string $key
+     * @param mixed $value
+     */
     public static function set_config($key, $value) {
         self::get_instance();
         self::$instance->config_dictonary[$key] = $value;
     }
 
+    /**
+     * 
+     * @param string $key
+     * @return mixed
+     */
     public static function get_config($key) {
         self::get_instance();
         return self::$instance->config_dictonary[$key];
     }
 
+    /**
+     * 
+     * @param string $relavite_url
+     * @return string
+     */
     public static function get_full_url($relavite_url) {
         if (substr_compare($relavite_url, '/', 0, 1) == 0) {
             $relavite_url = substr($relavite_url, 1);
@@ -101,6 +128,10 @@ class app {
         return self::get_config(APP_BASE_URL) . $relavite_url;
     }
 
+    /**
+     * 
+     * @param string $relavite_url
+     */
     public static function print_full_url($relavite_url) {
         echo self::get_full_url($relavite_url);
     }
@@ -136,18 +167,35 @@ class view implements irequest_result {
         }
     }
 
+    /**
+     * 
+     * @param array $styles
+     */
     public function set_styles(array $styles) {
         $this->styles = $styles;
     }
 
+    /**
+     * 
+     * @param array $scripts
+     */
     public function set_scripts(array $scripts) {
         $this->scripts = $scripts;
     }
 
+    /**
+     * 
+     * @param string $layout_view
+     */
     public function set_layout_view($layout_view) {
         $this->layout_view = $layout_view;
     }
 
+    /**
+     * 
+     * @param string $key
+     * @param mixed $value
+     */
     public function set_data($key, $value) {
         view_data::set($key, $value);
     }
@@ -180,10 +228,21 @@ class view_data {
 
     private static $dictonary = array();
 
+    /**
+     * 
+     * @param string $key
+     * @param mixed $value
+     */
     public static function set($key, $value) {
         self::$dictonary[$key] = $value;
     }
 
+    /**
+     * 
+     * @param string $key
+     * @return mixed
+     * @throws view_exception
+     */
     public static function get($key) {
         if (array_key_exists($key, self::$dictonary)) {
             return self::$dictonary[$key];
@@ -192,10 +251,19 @@ class view_data {
         }
     }
 
+    /**
+     * 
+     * @return int
+     */
     public static function count() {
         return count(self::$dictonary);
     }
 
+    /**
+     * 
+     * @param string $key
+     * @return boolean
+     */
     public static function contains($key) {
         return array_key_exists($key, self::$dictonary);
     }
@@ -206,6 +274,12 @@ class view_data {
 
 class controller_factory {
     
+    /**
+     * 
+     * @param string $class_name
+     * @return \class_name
+     * @throws Exception
+     */
     public static function get_controller($class_name) {
         if (!class_exists($class_name)) {
             throw new Exception("undefined controller: {$class_name}");
@@ -213,7 +287,14 @@ class controller_factory {
         return new $class_name;
     }
     
-    public static function excecute_method($class_name, $method_name, $args = []) {
+    /**
+     * 
+     * @param string $class_name
+     * @param string $method_name
+     * @param array $args
+     * @throws Exception
+     */
+    public static function excecute_method($class_name, $method_name, array $args = []) {
         $controller = self::get_controller($class_name);
         if (!method_exists($controller, $method_name)) {
             throw new Exception("undefined method: {$method_name} for class {$class_name}");
@@ -246,6 +327,10 @@ class json_result implements irequest_result {
 
     private $values;
 
+    /**
+     * 
+     * @param array $values
+     */
     public function __construct(array $values) {
         $this->values = $values;
     }
@@ -263,6 +348,10 @@ class redirect_result implements irequest_result {
 
     private $url;
 
+    /**
+     * 
+     * @param string $url
+     */
     public function __construct($url) {
         $this->url = $url;
     }
