@@ -30,10 +30,10 @@ class app {
 
     private static $instance;
     private $config_dictonary = array();
-    private $routes_dictonary;
+    private $routes_dictonary = array();
     private $request_route;
     private $controller_class;
-    private $controller_method = 'default_action';
+    private $controller_method;
     private $controller_args;
 
     private function __construct() {
@@ -45,7 +45,6 @@ class app {
             self::$instance = new self;
             self::$instance->config_dictonary[APP_BASE_URL] = '/';
             self::$instance->config_dictonary[APP_LAYOUT_VIEW] = NULL;
-            self::$instance->config_dictonary[APP_MODE] = APP_MODE_MVC;
         }
         self::$instance->request_route = '/' . filter_input(INPUT_GET, 'uri');
     }
@@ -56,14 +55,16 @@ class app {
      * @param string $target Controller class and method to invoke with the form "name_controller::method" or "name_controller"; if no method specified, default_action is invoked as method.
      */
     public static function add_route($route, $target = NULL) {
-        self::get_instance();
         if (!is_string($route)) {
             throw new Exception("route must be a string");
         }
-        $target_regexp = '#^.*_controller(::.+){0,1}$#';
-        if (preg_match($target_regexp, $target) !== 1) {
-            throw new Exception("target: $target must be a string of the form: \"name_controller::method\", \"name_controller\" or NULL");
+        if(isset($target)) {
+            $target_regexp = '#^.*_controller(::.+){0,1}$#';
+            if (preg_match($target_regexp, $target) !== 1) {
+                throw new Exception("target: $target must be a string of the form: \"name_controller::method\", \"name_controller\" or NULL");
+            }
         }
+        self::get_instance();
         self::$instance->routes_dictonary[$route] = $target;
     }
 
@@ -77,26 +78,27 @@ class app {
                     $this->controller_class = $targets[0];
                     if (count($targets) > 1) {
                         $this->controller_method = $targets[1];
-                    }
-                    if ($this->config_dictonary[APP_MODE] === APP_MODE_REST) {
+                    } else if(isset ($this->controller_args['action'])) {
+                        $this->controller_method = $this->controller_args['action'];
+                    } else {
                         $this->controller_method = $_SERVER['REQUEST_METHOD'];
                     }
                     $valid = TRUE;
                 } else {
-                    if(isset($this->controller_args[1])) {
+                    if(isset($this->controller_args['controller'])) {
+                        $this->controller_class = $this->controller_args['controller'] . '_controller';
+                    } else if(isset($this->controller_args[1])) {
                         $this->controller_class = $this->controller_args[1] . '_controller';
                     } else {
-                        throw new bad_uri_exception("undefined controller, route {$this->request_route} must have at least one sub expression");
+                        throw new bad_uri_exception("undefined controller, route {$this->request_route} must have a sub expression with name 'controller'");
                     }
-                    if(isset($this->controller_args[2])) {
-                        $this->controller_method = $this->controller_args[2];
-                    }
-                    if ($this->config_dictonary[APP_MODE] === APP_MODE_REST) {
+                    if(isset($this->controller_args['action'])) {
+                        $this->controller_method = $this->controller_args['action'];
+                    } else {
                         $this->controller_method = $_SERVER['REQUEST_METHOD'];
                     }
                     $valid = TRUE;
                 }
-                
                 break;
             }
         }
@@ -109,7 +111,7 @@ class app {
 
     /**
      * Main function of the application.
-     * Validate the requested URI and execute the associated controller method.
+     * Validate the requested URI and execute the associated controller action.
      * @throws bad_uri_exception
      */
     public static function run() {
@@ -242,6 +244,10 @@ class view implements irequest_result {
         if (view_data::contains(VIEW_MAIN_VIEW)) {
             include 'app/views/' . view_data::get(VIEW_MAIN_VIEW);
         }
+    }
+    
+    public static function render_view($view_filename) {
+        include 'app/views/' . $view_filename;
     }
 
 }
@@ -413,9 +419,6 @@ spl_autoload_register(function($class) {
 /* Configuration keys */
 define('APP_BASE_URL', 'app_base_url');
 define('APP_LAYOUT_VIEW', 'app_layout_view');
-define('APP_MODE', 'app_mode');
-define('APP_MODE_MVC', 0);
-define('APP_MODE_REST', 1);
 
 /* View keys */
 define('VIEW_SCRIPTS', 'view_scripts');

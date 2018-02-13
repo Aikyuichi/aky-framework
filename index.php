@@ -6,9 +6,9 @@ require './app/framework/aky.mvc.php';
 
 app::set_config(APP_BASE_URL, 'http://localhost/aky-framework/');
 
-app::add_route('/', 'main_controller::hello_world');
+app::add_route('/(?<controller>.*)/(?<action>.*)');
 
-try {
+try {   
     app::run();
 } catch (Exception $ex) {
     echo $ex->getCode() . ' - ' . $ex->getMessage();

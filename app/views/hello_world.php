@@ -6,7 +6,7 @@
     </head>
     <body>
         <h2>
-            <?php echo view_data::get('text'); ?>
+            <?= view_data::get('text'); ?>
         </h2>
     </body>
 </html>
