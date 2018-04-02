@@ -52,7 +52,7 @@ class app {
     /**
      * 
      * @param string $route Can contain regular expressions, the sub expressions are passed as arguments to the target method.
-     * @param string $target Controller class and method to invoke with the form "name_controller::method" or "name_controller"; if no method specified, default_action is invoked as method.
+     * @param string $target Controller class and method to invoke with the form "name_controller::method" or "name_controller"; if no method specified, request method is invoked as method.
      */
     public static function add_route($route, $target = NULL) {
         if (!is_string($route)) {
@@ -87,8 +87,6 @@ class app {
                 } else {
                     if(isset($this->controller_args['controller'])) {
                         $this->controller_class = $this->controller_args['controller'] . '_controller';
-                    } else if(isset($this->controller_args[1])) {
-                        $this->controller_class = $this->controller_args[1] . '_controller';
                     } else {
                         throw new bad_uri_exception("undefined controller, route {$this->request_route} must have a sub expression with name 'controller'");
                     }
@@ -160,6 +158,19 @@ class app {
      */
     public static function print_full_url($relavite_url) {
         echo self::get_full_url($relavite_url);
+    }
+
+}
+
+/* Class Controller */
+
+class controller {
+    
+    protected function allow_methods(array $request_methods) {
+        $request_method = $_SERVER['REQUEST_METHOD'];
+        if (array_search($request_method, $request_methods) === FALSE) {
+            throw new invalid_method('method not allowed');
+        }
     }
 
 }
@@ -342,6 +353,10 @@ class controller_factory {
         }
     }
     
+    public static function method_exists($controller, $method_name) {
+        return method_exists($controller, $method_name);
+    }
+    
 }
 
 /* Interface Request Result */
@@ -395,6 +410,10 @@ class redirect_result implements irequest_result {
 /* Exception clasess */
 
 class bad_uri_exception extends Exception {
+    
+}
+
+class invalid_method extends Exception {
     
 }
 
