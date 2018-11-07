@@ -30,10 +30,10 @@ class app {
 
     private static $instance;
     private $config_dictonary = array();
-    private $routes_dictonary;
+    private $routes_dictonary = array();
     private $request_route;
     private $controller_class;
-    private $controller_method = 'default_action';
+    private $controller_method;
     private $controller_args;
 
     private function __construct() {
@@ -45,7 +45,6 @@ class app {
             self::$instance = new self;
             self::$instance->config_dictonary[APP_BASE_URL] = '/';
             self::$instance->config_dictonary[APP_LAYOUT_VIEW] = NULL;
-            self::$instance->config_dictonary[APP_MODE] = APP_MODE_MVC;
         }
         self::$instance->request_route = '/' . filter_input(INPUT_GET, 'uri');
     }
@@ -53,17 +52,19 @@ class app {
     /**
      * 
      * @param string $route Can contain regular expressions, the sub expressions are passed as arguments to the target method.
-     * @param string $target Controller class and method to invoke with the form "name_controller::method" or "name_controller"; if no method specified, default_action is invoked as method.
+     * @param string $target Controller class and method to invoke with the form "name_controller::method" or "name_controller"; if no method specified, request method is invoked as method.
      */
     public static function add_route($route, $target = NULL) {
-        self::get_instance();
         if (!is_string($route)) {
             throw new Exception("route must be a string");
         }
-        $target_regexp = '#^.*_controller(::.+){0,1}$#';
-        if (preg_match($target_regexp, $target) !== 1) {
-            throw new Exception("target: $target must be a string of the form: \"name_controller::method\", \"name_controller\" or NULL");
+        if(isset($target)) {
+            $target_regexp = '#^.*_controller(::.+){0,1}$#';
+            if (preg_match($target_regexp, $target) !== 1) {
+                throw new Exception("target: $target must be a string of the form: \"name_controller::method\", \"name_controller\" or NULL");
+            }
         }
+        self::get_instance();
         self::$instance->routes_dictonary[$route] = $target;
     }
 
@@ -77,26 +78,25 @@ class app {
                     $this->controller_class = $targets[0];
                     if (count($targets) > 1) {
                         $this->controller_method = $targets[1];
-                    }
-                    if ($this->config_dictonary[APP_MODE] === APP_MODE_REST) {
+                    } else if(isset ($this->controller_args['action'])) {
+                        $this->controller_method = $this->controller_args['action'];
+                    } else {
                         $this->controller_method = $_SERVER['REQUEST_METHOD'];
                     }
                     $valid = TRUE;
                 } else {
-                    if(isset($this->controller_args[1])) {
-                        $this->controller_class = $this->controller_args[1] . '_controller';
+                    if(isset($this->controller_args['controller'])) {
+                        $this->controller_class = $this->controller_args['controller'] . '_controller';
                     } else {
-                        throw new bad_uri_exception("undefined controller, route {$this->request_route} must have at least one sub expression");
+                        throw new bad_uri_exception("undefined controller, route {$this->request_route} must have a sub expression with name 'controller'");
                     }
-                    if(isset($this->controller_args[2])) {
-                        $this->controller_method = $this->controller_args[2];
-                    }
-                    if ($this->config_dictonary[APP_MODE] === APP_MODE_REST) {
+                    if(isset($this->controller_args['action'])) {
+                        $this->controller_method = $this->controller_args['action'];
+                    } else {
                         $this->controller_method = $_SERVER['REQUEST_METHOD'];
                     }
                     $valid = TRUE;
                 }
-                
                 break;
             }
         }
@@ -109,7 +109,7 @@ class app {
 
     /**
      * Main function of the application.
-     * Validate the requested URI and execute the associated controller method.
+     * Validate the requested URI and execute the associated controller action.
      * @throws bad_uri_exception
      */
     public static function run() {
@@ -162,6 +162,19 @@ class app {
 
 }
 
+/* Class Controller */
+
+class controller {
+    
+    protected function allow_methods(array $request_methods) {
+        $request_method = $_SERVER['REQUEST_METHOD'];
+        if (array_search($request_method, $request_methods) === FALSE) {
+            throw new invalid_method('method not allowed');
+        }
+    }
+
+}
+
 /* Class View */
 
 class view implements irequest_result {
@@ -183,7 +196,7 @@ class view implements irequest_result {
     public function render() {
         view_data::set(VIEW_SCRIPTS, $this->scripts);
         view_data::set(VIEW_STYLES, $this->styles);
-        if ($this->layout_view != NULL) {
+        if (isset($this->layout_view)) {
             view_data::set(VIEW_MAIN_VIEW, $this->main_view);
             include "app/views/{$this->layout_view}";
         } else {
@@ -243,7 +256,14 @@ class view implements irequest_result {
             include 'app/views/' . view_data::get(VIEW_MAIN_VIEW);
         }
     }
-
+    
+    /**
+     * 
+     * @param string $view_filename
+     */
+    public static function render_partial_view($view_filename) {
+        include "app/views/{$view_filename}";
+    }
 }
 
 /* Class View Data */
@@ -259,6 +279,10 @@ class view_data {
      */
     public static function set($key, $value) {
         self::$dictonary[$key] = $value;
+    }
+    
+    public static function set_array($array) {
+        
     }
 
     /**
@@ -336,6 +360,10 @@ class controller_factory {
         }
     }
     
+    public static function method_exists($controller, $method_name) {
+        return method_exists($controller, $method_name);
+    }
+    
 }
 
 /* Interface Request Result */
@@ -392,6 +420,10 @@ class bad_uri_exception extends Exception {
     
 }
 
+class invalid_method extends Exception {
+    
+}
+
 class view_exception extends Exception {
     
 }
@@ -407,15 +439,12 @@ spl_autoload_register(function($class) {
 
 /* autoload model classes */
 spl_autoload_register(function($class) {
-    include 'app/model' . DIRECTORY_SEPARATOR . $class . '.class.php';
+    include 'app/model' . DIRECTORY_SEPARATOR . $class . '.php';
 });
 
 /* Configuration keys */
 define('APP_BASE_URL', 'app_base_url');
 define('APP_LAYOUT_VIEW', 'app_layout_view');
-define('APP_MODE', 'app_mode');
-define('APP_MODE_MVC', 0);
-define('APP_MODE_REST', 1);
 
 /* View keys */
 define('VIEW_SCRIPTS', 'view_scripts');
