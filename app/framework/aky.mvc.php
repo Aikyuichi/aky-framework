@@ -196,7 +196,7 @@ class view implements irequest_result {
     public function render() {
         view_data::set(VIEW_SCRIPTS, $this->scripts);
         view_data::set(VIEW_STYLES, $this->styles);
-        if ($this->layout_view != NULL) {
+        if (isset($this->layout_view)) {
             view_data::set(VIEW_MAIN_VIEW, $this->main_view);
             include "app/views/{$this->layout_view}";
         } else {
@@ -257,10 +257,13 @@ class view implements irequest_result {
         }
     }
     
-    public static function render_view($view_filename) {
-        include 'app/views/' . $view_filename;
+    /**
+     * 
+     * @param string $view_filename
+     */
+    public static function render_partial_view($view_filename) {
+        include "app/views/{$view_filename}";
     }
-
 }
 
 /* Class View Data */
@@ -276,6 +279,10 @@ class view_data {
      */
     public static function set($key, $value) {
         self::$dictonary[$key] = $value;
+    }
+    
+    public static function set_array($array) {
+        
     }
 
     /**
@@ -432,7 +439,7 @@ spl_autoload_register(function($class) {
 
 /* autoload model classes */
 spl_autoload_register(function($class) {
-    include 'app/model' . DIRECTORY_SEPARATOR . $class . '.class.php';
+    include 'app/model' . DIRECTORY_SEPARATOR . $class . '.php';
 });
 
 /* Configuration keys */
