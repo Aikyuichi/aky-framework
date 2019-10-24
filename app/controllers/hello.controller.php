@@ -1,11 +1,12 @@
 <?php
 
-class main_controller {
+class hello_controller {
 
-    public function hello_world() {
+    public function world($params) {
         $view = new view('hello.view.php');
         $view->set_data('hello', 'Hello');
         $view->set_data('world', 'World!');
+        $view->set_data('uri', $params[0]);
         return $view;
     }
 }

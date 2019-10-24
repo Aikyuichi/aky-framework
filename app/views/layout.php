@@ -8,7 +8,7 @@
         <?php view::render_scripts() ?>
     </head>
     <body>
-        <div>View using Layout</div>
+        <h1>Master Layout</h1>
         <?php view::render_main_view() ?>
     </body>
 </html>

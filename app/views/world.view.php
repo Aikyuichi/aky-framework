@@ -1,0 +1,1 @@
+<span><?= 'view: ' . view_data::get('world') ?></span>
