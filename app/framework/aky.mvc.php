@@ -46,7 +46,7 @@ class app {
             self::$instance->config_dictonary[APP_BASE_URL] = '/';
             self::$instance->config_dictonary[APP_LAYOUT_VIEW] = NULL;
         }
-        self::$instance->request_route = '/' . filter_input(INPUT_GET, 'uri');
+        self::$instance->request_route = array_key_first(filter_input_array(INPUT_GET));
     }
 
     /**
@@ -79,7 +79,7 @@ class app {
                     if (count($targets) > 1) {
                         $this->controller_method = $targets[1];
                     } else if(isset ($this->controller_args['action'])) {
-                        $this->controller_method = $this->controller_args['action'];
+                        $this->controller_method = str_replace('-', '_', $this->controller_args['action']);
                     } else {
                         $this->controller_method = $_SERVER['REQUEST_METHOD'];
                     }
@@ -91,7 +91,7 @@ class app {
                         throw new bad_uri_exception("undefined controller, route {$this->request_route} must have a sub expression with name 'controller'");
                     }
                     if(isset($this->controller_args['action'])) {
-                        $this->controller_method = $this->controller_args['action'];
+                        $this->controller_method = str_replace('-', '_', $this->controller_args['action']);
                     } else {
                         $this->controller_method = $_SERVER['REQUEST_METHOD'];
                     }
@@ -261,7 +261,7 @@ class view implements irequest_result {
      * 
      * @param string $view_filename
      */
-    public static function render_partial_view($view_filename) {
+    public static function render_view($view_filename) {
         include "app/views/{$view_filename}";
     }
 }
