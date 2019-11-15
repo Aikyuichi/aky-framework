@@ -43,16 +43,17 @@ class app {
     private static function get_instance() {
         if (!self::$instance instanceof self) {
             self::$instance = new self;
-            self::$instance->config_dictonary[APP_BASE_URL] = '/';
+            self::$instance->config_dictonary[APP_BASE_URL] = "https://{$_SERVER['SERVER_NAME']}/";
             self::$instance->config_dictonary[APP_LAYOUT_VIEW] = NULL;
+            self::$instance->request_route = '/' . filter_input(INPUT_GET, 'uri');
+            $_REQUEST['uri'] = self::$instance->request_route;
         }
-        self::$instance->request_route = array_key_first(filter_input_array(INPUT_GET));
     }
 
     /**
      * 
-     * @param string $route Can contain regular expressions, the sub expressions are passed as arguments to the target method.
-     * @param string $target Controller class and method to invoke with the form "name_controller::method" or "name_controller"; if no method specified, request method is invoked as method.
+     * @param string $route Can contain regular expressions, the sub expressions are passed as arguments to the target action.
+     * @param string $target Controller class and action to invoke with the form "class_controller::action" or "class_controller"; if no action specified, request method is invoked as action.
      */
     public static function add_route($route, $target = NULL) {
         if (!is_string($route)) {
@@ -61,7 +62,7 @@ class app {
         if(isset($target)) {
             $target_regexp = '#^.*_controller(::.+){0,1}$#';
             if (preg_match($target_regexp, $target) !== 1) {
-                throw new Exception("target: $target must be a string of the form: \"name_controller::method\", \"name_controller\" or NULL");
+                throw new Exception("target: $target must be a string of the form: \"class_controller::action\", \"class_controller\" or NULL");
             }
         }
         self::get_instance();
@@ -127,7 +128,9 @@ class app {
      */
     public static function set_config($key, $value) {
         self::get_instance();
-        self::$instance->config_dictonary[$key] = $value;
+        if (self::$instance->validate_config_key($key, $value)) {
+            self::$instance->config_dictonary[$key] = $value;
+        }
     }
 
     /**
@@ -159,7 +162,17 @@ class app {
     public static function print_full_url($relavite_url) {
         echo self::get_full_url($relavite_url);
     }
-
+    
+    private function validate_config_key($key, $value) {
+        switch ($key) {
+            case APP_BASE_URL:
+                if (preg_match('#^(http|https)\:\/\/(.*\/)+$#', $value) !== 1) {
+                    throw new Exception("$key must be an absolute url: protocol://domain/[path/]");
+                }
+                break;
+        }
+        return true;
+    }
 }
 
 /* Class Controller */
@@ -443,6 +456,12 @@ spl_autoload_register(function($class) {
 });
 
 /* Configuration keys */
+
+/**
+ * key to configure the base url of the application, this must be a absolute url
+ * protocol://domain/[path/].
+ * It's used to convert relative urls to absolute
+ */
 define('APP_BASE_URL', 'app_base_url');
 define('APP_LAYOUT_VIEW', 'app_layout_view');
 

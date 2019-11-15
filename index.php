@@ -8,6 +8,7 @@ app::set_config(APP_BASE_URL, 'http://localhost/aky-framework/');
 app::set_config(APP_LAYOUT_VIEW, 'layout.php');
 
 app::add_route('/(?<controller>.*)/(?<action>.*)');
+app::add_route('/', 'hello_controller::world');
 
 try {   
     app::run();
