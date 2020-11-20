@@ -4,11 +4,11 @@
     <head>
         <meta charset="UTF-8">
         <title>Layout</title>
-        <?php view::render_styles() ?>
-        <?php view::render_scripts() ?>
+        <?= ${VIEW_STYLES} ?>
+        <?= ${VIEW_SCRIPTS} ?>
     </head>
     <body>
         <h1>Master Layout</h1>
-        <?php view::render_main_view() ?>
+        <?php include ${VIEW_MAIN_VIEW}; ?>
     </body>
 </html>

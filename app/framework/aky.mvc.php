@@ -32,21 +32,20 @@ class app {
     private $config_dictonary = array();
     private $routes_dictonary = array();
     private $request_route;
-    private $controller_class;
-    private $controller_method;
+    private string $controller_class;
+    private string $controller_method;
     private $controller_args;
 
     private function __construct() {
-        
+        $this->config_dictonary[APP_BASE_URL] = "https://{$_SERVER['SERVER_NAME']}/";
+        $this->config_dictonary[APP_LAYOUT_VIEW] = NULL;
+        $this->request_route = '/' . filter_input(INPUT_GET, 'uri');
+        $_REQUEST['uri'] = $this->request_route;
     }
 
     private static function get_instance() {
         if (!self::$instance instanceof self) {
             self::$instance = new self;
-            self::$instance->config_dictonary[APP_BASE_URL] = "https://{$_SERVER['SERVER_NAME']}/";
-            self::$instance->config_dictonary[APP_LAYOUT_VIEW] = NULL;
-            self::$instance->request_route = '/' . filter_input(INPUT_GET, 'uri');
-            $_REQUEST['uri'] = self::$instance->request_route;
         }
     }
 
@@ -55,14 +54,22 @@ class app {
      * @param string $route Can contain regular expressions, the sub expressions are passed as arguments to the target action.
      * @param string $target Controller class and action to invoke with the form "class_controller::action" or "class_controller"; if no action specified, request method is invoked as action.
      */
-    public static function add_route($route, $target = NULL) {
-        if (!is_string($route)) {
-            throw new Exception("route must be a string");
-        }
-        if(isset($target)) {
+    public static function add_route(string $route, string $target = NULL) {
+        if (isset($target)) {
             $target_regexp = '#^.*_controller(::.+){0,1}$#';
             if (preg_match($target_regexp, $target) !== 1) {
-                throw new Exception("target: $target must be a string of the form: \"class_controller::action\", \"class_controller\" or NULL");
+                throw new Exception("target: {$target} must be a string of the form: \"class_controller::action\", \"class_controller\" or NULL");
+            }
+        } else {
+            $controller_expr_counter = substr_count($route, '?<controller>');
+            if ($controller_expr_counter == 0) {
+                throw new Exception("route: {$route} must have a sub expression with name 'controller'");
+            } else if ($controller_expr_counter > 1) {
+                throw new Exception("route: {$route} must have only one sub expression with name 'controller'");
+            }
+            $action_expr_counter = substr_count($route, '?<action>');
+            if ($action_expr_counter > 1) {
+                throw new Exception("route: {$route} must have only one sub expression with name 'action'");
             }
         }
         self::get_instance();
@@ -79,19 +86,15 @@ class app {
                     $this->controller_class = $targets[0];
                     if (count($targets) > 1) {
                         $this->controller_method = $targets[1];
-                    } else if(isset ($this->controller_args['action'])) {
+                    } else if (isset($this->controller_args['action'])) {
                         $this->controller_method = str_replace('-', '_', $this->controller_args['action']);
                     } else {
                         $this->controller_method = $_SERVER['REQUEST_METHOD'];
                     }
                     $valid = TRUE;
                 } else {
-                    if(isset($this->controller_args['controller'])) {
-                        $this->controller_class = $this->controller_args['controller'] . '_controller';
-                    } else {
-                        throw new bad_uri_exception("undefined controller, route {$this->request_route} must have a sub expression with name 'controller'");
-                    }
-                    if(isset($this->controller_args['action'])) {
+                    $this->controller_class = $this->controller_args['controller'] . '_controller';
+                    if (isset($this->controller_args['action'])) {
                         $this->controller_method = str_replace('-', '_', $this->controller_args['action']);
                     } else {
                         $this->controller_method = $_SERVER['REQUEST_METHOD'];
@@ -111,12 +114,13 @@ class app {
     /**
      * Main function of the application.
      * Validate the requested URI and execute the associated controller action.
-     * @throws bad_uri_exception
+     * @throws bad_request_exception
      */
     public static function run() {
         self::get_instance();
         if (!self::$instance->validate_request_route()) {
-            throw new bad_uri_exception('undefied route: ' . self::$instance->request_route);
+            http_response_code(400);
+            throw new bad_request_exception('undefied route: ' . self::$instance->request_route, 1);
         }
         self::$instance->run_controller();
     }
@@ -126,7 +130,7 @@ class app {
      * @param string $key
      * @param mixed $value
      */
-    public static function set_config($key, $value) {
+    public static function set_config(string $key, $value) {
         self::get_instance();
         if (self::$instance->validate_config_key($key, $value)) {
             self::$instance->config_dictonary[$key] = $value;
@@ -138,7 +142,7 @@ class app {
      * @param string $key
      * @return mixed
      */
-    public static function get_config($key) {
+    public static function get_config(string $key) {
         self::get_instance();
         return self::$instance->config_dictonary[$key];
     }
@@ -148,22 +152,14 @@ class app {
      * @param string $relavite_url
      * @return string
      */
-    public static function get_full_url($relavite_url) {
+    public static function resolve_url(string $relavite_url): string {
         if (substr_compare($relavite_url, '/', 0, 1) == 0) {
             $relavite_url = substr($relavite_url, 1);
         }
         return self::get_config(APP_BASE_URL) . $relavite_url;
     }
 
-    /**
-     * 
-     * @param string $relavite_url
-     */
-    public static function print_full_url($relavite_url) {
-        echo self::get_full_url($relavite_url);
-    }
-    
-    private function validate_config_key($key, $value) {
+    private function validate_config_key(string $key, $value) {
         switch ($key) {
             case APP_BASE_URL:
                 if (preg_match('#^(http|https)\:\/\/(.*\/)+$#', $value) !== 1) {
@@ -173,12 +169,13 @@ class app {
         }
         return true;
     }
+
 }
 
 /* Class Controller */
 
 class controller {
-    
+
     protected function allow_methods(array $request_methods) {
         $request_method = $_SERVER['REQUEST_METHOD'];
         if (array_search($request_method, $request_methods) === FALSE) {
@@ -196,6 +193,7 @@ class view implements irequest_result {
     private $main_view;
     private $styles;
     private $scripts;
+    private $data;
 
     public function __construct($main_view, $use_layout_view = TRUE) {
         $this->main_view = $main_view;
@@ -204,16 +202,18 @@ class view implements irequest_result {
         }
         $this->styles = array();
         $this->scripts = array();
+        $this->data = array();
     }
 
     public function render() {
-        view_data::set(VIEW_SCRIPTS, $this->scripts);
-        view_data::set(VIEW_STYLES, $this->styles);
+        ${VIEW_STYLES} = $this->render_styles();
+        ${VIEW_SCRIPTS} = $this->render_scripts();
+        extract($this->data, EXTR_OVERWRITE);
         if (isset($this->layout_view)) {
-            view_data::set(VIEW_MAIN_VIEW, $this->main_view);
-            include "app/views/{$this->layout_view}";
+            ${VIEW_MAIN_VIEW} = self::view_path($this->main_view);
+            include self::view_path($this->layout_view);
         } else {
-            include "app/views/{$this->main_view}";
+            include self::view_path($this->main_view);
         }
     }
 
@@ -237,7 +237,7 @@ class view implements irequest_result {
      * 
      * @param string $layout_view
      */
-    public function set_layout_view($layout_view) {
+    public function set_layout_view(string $layout_view) {
         $this->layout_view = $layout_view;
     }
 
@@ -246,37 +246,46 @@ class view implements irequest_result {
      * @param string $key
      * @param mixed $value
      */
-    public function set_data($key, $value) {
-        view_data::set($key, $value);
+    public function set_data(string $key, $value) {
+        $this->data[$key] = $value;
     }
 
-    public static function render_scripts() {
-        $scripts = view_data::get(VIEW_SCRIPTS);
-        foreach ($scripts as $script) {
-            echo '<script src="' . app::get_full_url($script) . '" type="text/javascript"></script>';
-        }
-    }
-
-    public static function render_styles() {
-        $styles = view_data::get(VIEW_STYLES);
-        foreach ($styles as $style) {
-            echo '<link href="' . app::get_full_url($style) . '" rel="stylesheet"/>';
-        }
-    }
-
-    public static function render_main_view() {
-        if (view_data::contains(VIEW_MAIN_VIEW)) {
-            include 'app/views/' . view_data::get(VIEW_MAIN_VIEW);
-        }
-    }
-    
     /**
      * 
      * @param string $view_filename
      */
-    public static function render_view($view_filename) {
-        include "app/views/{$view_filename}";
+    public static function include_view(string $view_filename, array $data = NULL) {
+        if (isset($data)) {
+            extract($data, EXTR_OVERWRITE);
+        }
+        include self::get_path($view_filename);
     }
+    
+    /**
+     * 
+     * @param string $view_filename 
+     * @return string View file full path
+     */
+    public static function view_path($view_filename) {
+        return "app/views/$view_filename";
+    }
+    
+    private function render_styles(): string {
+        $block = '';
+        foreach ($this->styles as $style) {
+            $block .= '<link href="' . app::resolve_url($style) . '" rel="stylesheet"/>';
+        }
+        return $block;
+    }
+
+    private function render_scripts(): string {
+        $block = '';
+        foreach ($this->scripts as $script) {
+            $block .= '<script src="' . app::resolve_url($script) . '" type="text/javascript"></script>';
+        }
+        return $block;
+    }
+
 }
 
 /* Class View Data */
@@ -290,12 +299,12 @@ class view_data {
      * @param string $key
      * @param mixed $value
      */
-    public static function set($key, $value) {
+    public static function set(string $key, $value) {
         self::$dictonary[$key] = $value;
     }
-    
+
     public static function set_array($array) {
-        
+        self::$dictonary = array_merge(self::$dictonary, $array);
     }
 
     /**
@@ -304,7 +313,7 @@ class view_data {
      * @return mixed
      * @throws view_exception
      */
-    public static function get($key) {
+    public static function get(string $key) {
         if (array_key_exists($key, self::$dictonary)) {
             return self::$dictonary[$key];
         } else {
@@ -325,7 +334,7 @@ class view_data {
      * @param string $key
      * @return boolean
      */
-    public static function contains($key) {
+    public static function contains(string $key) {
         return array_key_exists($key, self::$dictonary);
     }
 
@@ -334,20 +343,20 @@ class view_data {
 /* Class Controller Factory */
 
 class controller_factory {
-    
+
     /**
      * 
      * @param string $class_name
      * @return \class_name
      * @throws Exception
      */
-    public static function get_controller($class_name) {
+    public static function get_controller(string $class_name) {
         if (!class_exists($class_name)) {
-            throw new Exception("undefined controller: {$class_name}");
+            throw new bad_request_exception("undefined controller: '{$class_name}'", 2);
         }
         return new $class_name;
     }
-    
+
     /**
      * 
      * @param string $class_name
@@ -355,10 +364,10 @@ class controller_factory {
      * @param array $args
      * @throws Exception
      */
-    public static function excecute_method($class_name, $method_name, array $args = []) {
+    public static function excecute_method(string $class_name, string $method_name, array $args = []) {
         $controller = self::get_controller($class_name);
         if (!method_exists($controller, $method_name)) {
-            throw new Exception("undefined method: {$method_name} for class {$class_name}");
+            throw new bad_request_exception("undefined action: '{$method_name}' on '{$class_name}'", 3);
         }
         $result = NULL;
         if (count($args) > 0) {
@@ -372,11 +381,11 @@ class controller_factory {
             echo $result;
         }
     }
-    
-    public static function method_exists($controller, $method_name) {
+
+    public static function method_exists(string $controller, string $method_name) {
         return method_exists($controller, $method_name);
     }
-    
+
 }
 
 /* Interface Request Result */
@@ -429,7 +438,7 @@ class redirect_result implements irequest_result {
 
 /* Exception clasess */
 
-class bad_uri_exception extends Exception {
+class bad_request_exception extends Exception {
     
 }
 

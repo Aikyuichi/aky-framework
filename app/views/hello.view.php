@@ -1,6 +1,6 @@
 <h2>
-    <?= 'view: ' . view_data::get('hello'); ?>
+    <?= "main view: $hello" ?>
 </h2>
 <h3>
-    <?php view::render_view('world.view.php') ?>
+    <?php include view::view_path('world.view.php'); ?>
 </h3>
