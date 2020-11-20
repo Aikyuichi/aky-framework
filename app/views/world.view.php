@@ -1,1 +1,1 @@
-<span><?= 'view: ' . view_data::get('world') ?></span>
+<span><?= 'nested view: ' . $world ?></span>
