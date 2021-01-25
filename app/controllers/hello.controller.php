@@ -1,6 +1,6 @@
 <?php
 
-class hello_controller {
+class hello_controller extends controller {
 
     public function world($params) {
         $view = new view('hello.view.php');

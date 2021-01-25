@@ -29,12 +29,12 @@
 class app {
 
     private static $instance;
-    private $config_dictonary = array();
-    private $routes_dictonary = array();
-    private $request_route;
+    private array $config_dictonary = [];
+    private array $routes_dictonary = [];
+    private string $request_route;
     private string $controller_class;
     private string $controller_method;
-    private $controller_args;
+    private array $controller_args = [];
 
     private function __construct() {
         $this->config_dictonary[APP_BASE_URL] = "https://{$_SERVER['SERVER_NAME']}/";
@@ -76,7 +76,7 @@ class app {
         self::$instance->routes_dictonary[$route] = $target;
     }
 
-    private function validate_request_route() {
+    private function validate_request_route(): bool {
         $valid = FALSE;
         foreach ($this->routes_dictonary as $route => $target) {
             $regexp = '#^' . $route . '$#';
@@ -125,11 +125,6 @@ class app {
         self::$instance->run_controller();
     }
 
-    /**
-     * 
-     * @param string $key
-     * @param mixed $value
-     */
     public static function set_config(string $key, $value) {
         self::get_instance();
         if (self::$instance->validate_config_key($key, $value)) {
@@ -137,11 +132,6 @@ class app {
         }
     }
 
-    /**
-     * 
-     * @param string $key
-     * @return mixed
-     */
     public static function get_config(string $key) {
         self::get_instance();
         return self::$instance->config_dictonary[$key];
@@ -176,10 +166,19 @@ class app {
 
 class controller {
 
-    protected function allow_methods(array $request_methods) {
-        $request_method = $_SERVER['REQUEST_METHOD'];
-        if (array_search($request_method, $request_methods) === FALSE) {
-            throw new invalid_method('method not allowed');
+    protected string $request_method;
+    protected array $request_data = [];
+
+    public function __construct() {
+        $this->request_method = $_SERVER['REQUEST_METHOD'];
+        $variables = [];
+        if ($this->request_method === 'GET') {
+            $variables = $_GET;
+        } else if ($this->request_method === 'POST') {
+            $variables = $_POST;
+        }
+        foreach ($variables as $key => $value) {
+            $this->request_data[$key] = filter_var($value, FILTER_SANITIZE_SPECIAL_CHARS);
         }
     }
 
@@ -189,13 +188,13 @@ class controller {
 
 class view implements irequest_result {
 
-    private $layout_view;
-    private $main_view;
-    private $styles;
-    private $scripts;
-    private $data;
+    private string $layout_view;
+    private string $main_view;
+    private array $styles = [];
+    private array $scripts = [];
+    private array $data = [];
 
-    public function __construct($main_view, $use_layout_view = TRUE) {
+    public function __construct(string $main_view, bool $use_layout_view = TRUE) {
         $this->main_view = $main_view;
         if ($use_layout_view === TRUE) {
             $this->layout_view = app::get_config(APP_LAYOUT_VIEW);
@@ -210,33 +209,22 @@ class view implements irequest_result {
         ${VIEW_SCRIPTS} = $this->render_scripts();
         extract($this->data, EXTR_OVERWRITE);
         if (isset($this->layout_view)) {
-            ${VIEW_MAIN_VIEW} = self::view_path($this->main_view);
+            ${VIEW_MAIN} = self::view_path($this->main_view);
             include self::view_path($this->layout_view);
         } else {
             include self::view_path($this->main_view);
         }
     }
 
-    /**
-     * 
-     * @param array $styles
-     */
+    
     public function set_styles(array $styles) {
         $this->styles = $styles;
     }
 
-    /**
-     * 
-     * @param array $scripts
-     */
     public function set_scripts(array $scripts) {
         $this->scripts = $scripts;
     }
 
-    /**
-     * 
-     * @param string $layout_view
-     */
     public function set_layout_view(string $layout_view) {
         $this->layout_view = $layout_view;
     }
@@ -255,21 +243,21 @@ class view implements irequest_result {
      * @param string $view_filename
      */
     public static function include_view(string $view_filename, array $data = NULL) {
-        if (isset($data)) {
+        if ($data) {
             extract($data, EXTR_OVERWRITE);
         }
-        include self::get_path($view_filename);
+        include self::view_path($view_filename);
     }
-    
+
     /**
      * 
      * @param string $view_filename 
      * @return string View file full path
      */
-    public static function view_path($view_filename) {
-        return "app/views/$view_filename";
+    public static function view_path(string $view_filename) {
+        return "app/views/{$view_filename}";
     }
-    
+
     private function render_styles(): string {
         $block = '';
         foreach ($this->styles as $style) {
@@ -285,7 +273,7 @@ class view implements irequest_result {
         }
         return $block;
     }
-
+    
 }
 
 /* Class View Data */
@@ -317,7 +305,7 @@ class view_data {
         if (array_key_exists($key, self::$dictonary)) {
             return self::$dictonary[$key];
         } else {
-            throw new view_exception("ViewData: key '$key' don't exist in dictonary.");
+            throw new view_exception("ViewData: key '{$key}' don't exist in dictonary.");
         }
     }
 
@@ -382,7 +370,7 @@ class controller_factory {
         }
     }
 
-    public static function method_exists(string $controller, string $method_name) {
+    public static function method_exists(string $controller, string $method_name): bool {
         return method_exists($controller, $method_name);
     }
 
@@ -399,7 +387,7 @@ interface irequest_result {
 
 class json_result implements irequest_result {
 
-    private $values;
+    private array $values;
 
     /**
      * 
@@ -420,13 +408,13 @@ class json_result implements irequest_result {
 
 class redirect_result implements irequest_result {
 
-    private $url;
+    private string $url;
 
     /**
      * 
      * @param string $url
      */
-    public function __construct($url) {
+    public function __construct(string $url) {
         $this->url = $url;
     }
 
@@ -439,10 +427,6 @@ class redirect_result implements irequest_result {
 /* Exception clasess */
 
 class bad_request_exception extends Exception {
-    
-}
-
-class invalid_method extends Exception {
     
 }
 
@@ -477,4 +461,4 @@ define('APP_LAYOUT_VIEW', 'app_layout_view');
 /* View keys */
 define('VIEW_SCRIPTS', 'view_scripts');
 define('VIEW_STYLES', 'view_styles');
-define('VIEW_MAIN_VIEW', 'view_main_view');
+define('VIEW_MAIN', 'view_main');

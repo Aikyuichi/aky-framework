@@ -9,6 +9,6 @@
     </head>
     <body>
         <h1>Master Layout</h1>
-        <?php include ${VIEW_MAIN_VIEW}; ?>
+        <?php include ${VIEW_MAIN}; ?>
     </body>
 </html>
