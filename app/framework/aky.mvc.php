@@ -86,7 +86,7 @@ class app {
                     $this->controller_class = $targets[0];
                     if (count($targets) > 1) {
                         $this->controller_method = $targets[1];
-                    } else if (isset($this->controller_args['action'])) {
+                    } else if (!empty($this->controller_args['action'])) {
                         $this->controller_method = str_replace('-', '_', $this->controller_args['action']);
                     } else {
                         $this->controller_method = $_SERVER['REQUEST_METHOD'];
@@ -94,7 +94,7 @@ class app {
                     $valid = TRUE;
                 } else {
                     $this->controller_class = $this->controller_args['controller'] . '_controller';
-                    if (isset($this->controller_args['action'])) {
+                    if (!empty($this->controller_args['action'])) {
                         $this->controller_method = str_replace('-', '_', $this->controller_args['action']);
                     } else {
                         $this->controller_method = $_SERVER['REQUEST_METHOD'];
@@ -171,12 +171,7 @@ class controller {
 
     public function __construct() {
         $this->request_method = $_SERVER['REQUEST_METHOD'];
-        $variables = [];
-        if ($this->request_method === 'GET') {
-            $variables = $_GET;
-        } else if ($this->request_method === 'POST') {
-            $variables = $_POST;
-        }
+        $variables = $_REQUEST;
         foreach ($variables as $key => $value) {
             $this->request_data[$key] = filter_var($value, FILTER_SANITIZE_SPECIAL_CHARS);
         }
@@ -199,9 +194,6 @@ class view implements irequest_result {
         if ($use_layout_view === TRUE) {
             $this->layout_view = app::get_config(APP_LAYOUT_VIEW);
         }
-        $this->styles = array();
-        $this->scripts = array();
-        $this->data = array();
     }
 
     public function render() {
@@ -209,10 +201,10 @@ class view implements irequest_result {
         ${VIEW_SCRIPTS} = $this->render_scripts();
         extract($this->data, EXTR_OVERWRITE);
         if (isset($this->layout_view)) {
-            ${VIEW_MAIN} = self::view_path($this->main_view);
-            include self::view_path($this->layout_view);
+            ${VIEW_MAIN} = $this->main_view;
+            include $this->layout_view;
         } else {
-            include self::view_path($this->main_view);
+            include $this->main_view;
         }
     }
 
@@ -230,33 +222,27 @@ class view implements irequest_result {
     }
 
     /**
-     * 
-     * @param string $key
+     *
      * @param mixed $value
      */
     public function set_data(string $key, $value) {
         $this->data[$key] = $value;
     }
 
-    /**
-     * 
-     * @param string $view_filename
-     */
     public static function include_view(string $view_filename, array $data = NULL) {
         if ($data) {
             extract($data, EXTR_OVERWRITE);
         }
-        include self::view_path($view_filename);
+        include $view_filename;
     }
 
     /**
-     * 
-     * @param string $view_filename 
+     *
      * @return string View file full path
      */
-    public static function view_path(string $view_filename) {
-        return "app/views/{$view_filename}";
-    }
+//    public static function view_path(string $view_filename): string {
+//        return "app/views/{$view_filename}";
+//    }
 
     private function render_styles(): string {
         $block = '';
@@ -280,24 +266,22 @@ class view implements irequest_result {
 
 class view_data {
 
-    private static $dictonary = array();
+    private static $dictonary = [];
 
     /**
-     * 
-     * @param string $key
+     *
      * @param mixed $value
      */
     public static function set(string $key, $value) {
         self::$dictonary[$key] = $value;
     }
 
-    public static function set_array($array) {
+    public static function set_array(array $array) {
         self::$dictonary = array_merge(self::$dictonary, $array);
     }
 
     /**
-     * 
-     * @param string $key
+     *
      * @return mixed
      * @throws view_exception
      */
@@ -309,20 +293,11 @@ class view_data {
         }
     }
 
-    /**
-     * 
-     * @return int
-     */
-    public static function count() {
+    public static function count(): int {
         return count(self::$dictonary);
     }
 
-    /**
-     * 
-     * @param string $key
-     * @return boolean
-     */
-    public static function contains(string $key) {
+    public static function contains(string $key): bool {
         return array_key_exists($key, self::$dictonary);
     }
 
@@ -333,8 +308,7 @@ class view_data {
 class controller_factory {
 
     /**
-     * 
-     * @param string $class_name
+     *
      * @return \class_name
      * @throws Exception
      */
@@ -346,10 +320,7 @@ class controller_factory {
     }
 
     /**
-     * 
-     * @param string $class_name
-     * @param string $method_name
-     * @param array $args
+     *
      * @throws Exception
      */
     public static function excecute_method(string $class_name, string $method_name, array $args = []) {
@@ -358,10 +329,19 @@ class controller_factory {
             throw new bad_request_exception("undefined action: '{$method_name}' on '{$class_name}'", 3);
         }
         $result = NULL;
-        if (count($args) > 0) {
-            $result = call_user_func(array($controller, $method_name), $args);
-        } else {
-            $result = call_user_func(array($controller, $method_name));
+        if (method_exists($controller, 'init')) {
+            if (count($args) > 0) {
+                $result = call_user_func([$controller, 'init'], $args);
+            } else {
+                $result = call_user_func([$controller, 'init']);
+            }
+        }
+        if ($result === NULL) {
+            if (count($args) > 0) {
+                $result = call_user_func([$controller, $method_name], $args);
+            } else {
+                $result = call_user_func([$controller, $method_name]);
+            }
         }
         if ($result instanceof irequest_result) {
             $result->render();
@@ -389,10 +369,6 @@ class json_result implements irequest_result {
 
     private array $values;
 
-    /**
-     * 
-     * @param array $values
-     */
     public function __construct(array $values) {
         $this->values = $values;
     }
@@ -410,10 +386,6 @@ class redirect_result implements irequest_result {
 
     private string $url;
 
-    /**
-     * 
-     * @param string $url
-     */
     public function __construct(string $url) {
         $this->url = $url;
     }
